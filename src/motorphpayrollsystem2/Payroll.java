@@ -75,14 +75,13 @@ public class Payroll {
         else if(taxableIncome <= 666666) return 40833.33 + (taxableIncome-166667) * 0.32;
         else return 200833.33 + (taxableIncome-666667) * 0.35;
     }
+    // Total monthly contributions
+    public static double TotalContributions(double monthlyGross) {
+        return SSS(monthlyGross) + PhilHealth(monthlyGross) + PAGIBIG(monthlyGross);
+    }
 
-    // Total Deduction
-    public static double TotalDeduction(double grossMonthly){
-        double sss = SSS(grossMonthly);
-        double ph = PhilHealth(grossMonthly);
-        double pi = PAGIBIG(grossMonthly);
-        double taxable = grossMonthly - (sss + ph + pi);
-        double wht = WithHoldingTax(taxable);
-        return sss + ph + pi + wht;
+    // Distribute WHT across weekly gross proportionally
+    public static double WeeklyWithholdingTax(double weeklyGross, double monthlyGross, double totalWHT) {
+        return (weeklyGross / monthlyGross) * totalWHT;
     }
 }
