@@ -12,7 +12,7 @@ This is a Java-based payroll system that computes employee weekly salary, attend
 -Fernalyn Bernardo
 -Kenneth Culagbang
 
-Each member contributed to different parts of the system such as coding, testing, and debugging.
+Each member contributed to different parts of the system.
 
 
 ### Classes and Their Purpose:
