@@ -8,16 +8,21 @@ import java.util.*;
 public class MotorPH {
 
     // --- Data for employees ---
+    // These ArrayLists store employee data using the same index
+    // (e.g., index 0 in all lists refers to the same employee)
     static ArrayList<Integer> empNos = new ArrayList<>();      // store employee numbers
     static ArrayList<String> empNames = new ArrayList<>();     // store employee full names
     static ArrayList<String> empBirthdays = new ArrayList<>(); // store birthdays
     static ArrayList<Double> empRates = new ArrayList<>();     // store hourly rates
+    // 3D array storing working hours: 
+    //  Format: [employeeIndex][month][week ]
+    // month = 0–11, week = 0–3 
     static double[][][] monthlyHours; // 3D array to store hours [employee][month][week]
-
+    //This method splits a CSV line into fields while handling quoted values
     // --- Utility: parse CSV line ---
     public static String[] parseCSVLine(String line) {
         List<String> tokens = new ArrayList<>();
-        boolean inQuotes = false; // check if we are inside quotes
+        boolean inQuotes = false; // Tracks if parser is inside quotation marks
         StringBuilder sb = new StringBuilder();
         for (char c : line.toCharArray()) {
             if (c == '"') inQuotes = !inQuotes; // toggle quotes
@@ -194,8 +199,9 @@ public class MotorPH {
         double totalSSS = SSS(monthlyGross);
         double totalPhilHealth = PhilHealth(monthlyGross);
         double totalPAGIBIG = PAGIBIG(monthlyGross);
+        //Tax is based on salary after deductions//
         double totalWHT = WithholdingTax(monthlyGross - (totalSSS + totalPhilHealth + totalPAGIBIG));
-
+        // Only show deductions on the last week//
         // --- Print output ---
         System.out.println("------------------------------------------------");
         System.out.println("Employee #: " + empNos.get(empIndex));
