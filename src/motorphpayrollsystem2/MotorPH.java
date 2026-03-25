@@ -2,56 +2,315 @@ package motorphpayrollsystem2;
 
 import java.io.*;
 import java.time.*;
-import java.time.format.*;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public class MotorPH {
 
-    // --- Data for employees ---
-    // These ArrayLists store employee data using the same index
-    // (e.g., index 0 in all lists refers to the same employee)
-    static ArrayList<Integer> empNos = new ArrayList<>();      // store employee numbers
-    static ArrayList<String> empNames = new ArrayList<>();     // store employee full names
-    static ArrayList<String> empBirthdays = new ArrayList<>(); // store birthdays
-    static ArrayList<Double> empRates = new ArrayList<>();     // store hourly rates
-    // 3D array storing working hours: 
-    //  Format: [employeeIndex][month][week ]
-    // month = 0–11, week = 0–3 
-    static double[][][] monthlyHours; // 3D array to store hours [employee][month][week]
-    //This method splits a CSV line into fields while handling quoted values
-    // --- Utility: parse CSV line ---
-    public static String[] parseCSVLine(String line) {
-        List<String> tokens = new ArrayList<>();
-        boolean inQuotes = false; // Tracks if parser is inside quotation marks
-        StringBuilder sb = new StringBuilder();
-        for (char c : line.toCharArray()) {
-            if (c == '"') inQuotes = !inQuotes; // toggle quotes
-            else if (c == ',' && !inQuotes) {   // comma outside quotes means new field
-                tokens.add(sb.toString());      // save current field
-                sb.setLength(0);                // reset string builder
-            } else sb.append(c); // add char to current field
+    // ---------------- EMPLOYEE DATA ----------------
+    static ArrayList<Integer> employeeNumbers = new ArrayList<>();          // store employee numbers
+    static ArrayList<String> employeeNames = new ArrayList<>();            // store full names
+    static ArrayList<String> employeeBirthdays = new ArrayList<>();        // store birthdays
+    static ArrayList<String> employeeAddresses = new ArrayList<>();        // store addresses
+    static ArrayList<String> employeePhones = new ArrayList<>();           // store phone numbers
+    static ArrayList<String> employeeStatuses = new ArrayList<>();         // store employment status
+    static ArrayList<String> employeePositions = new ArrayList<>();        // store position/job title
+    static ArrayList<Double> employeeHourlyRates = new ArrayList<>();      // store hourly rates
+
+    // attendance storage using maps (employee -> list of attendance records)
+    static HashMap<Integer, List<Attendance>> attendanceMap = new HashMap<>();
+
+    static DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("M/d/yyyy"); // format for reading attendance CSV
+    static DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("H:mm");     // format for time
+
+    // ---------------- MAIN METHOD ----------------
+    public static void main(String[] args) {
+
+        Scanner scanner = new Scanner(System.in);
+
+        loadEmployees();           // load employee data from CSV
+        loadAttendance();          // load attendance data from CSV
+
+        while (true) {
+            // LOGIN SCREEN
+            System.out.println("\n=== LOGIN ===");
+            System.out.print("Username: ");
+            String user = scanner.nextLine();
+            System.out.print("Password: ");
+            String pass = scanner.nextLine();
+
+            // check login credentials
+            if (user.equals("employee") && pass.equals("12345")) {
+                employeeMenu(scanner);        // employee menu
+            } else if (user.equals("payroll_staff") && pass.equals("12345")) {
+                payrollMenu(scanner);         // payroll staff menu
+            } else {
+                System.out.println("Invalid login.");
+            }
         }
-        tokens.add(sb.toString()); // add last field
-        return tokens.toArray(String[]::new);
     }
 
-    // --- Calculate hours worked from time strings ---
-    public static double calculateHoursWorked(String timeIn, String timeOut) {
-        try {
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("H:mm");
-            LocalTime in = LocalTime.parse(timeIn, formatter);  // convert string to time
-            LocalTime out = LocalTime.parse(timeOut, formatter);
-            Duration duration = Duration.between(in, out);     // get difference
-            return duration.toMinutes() / 60.0;                // convert minutes to hours
+    // ---------------- ATTENDANCE RECORD ----------------
+    static class Attendance {
+        LocalDate date;         // date of attendance
+        LocalTime timeIn;       // time in
+        LocalTime timeOut;      // time out
+
+        Attendance(LocalDate date, LocalTime in, LocalTime out) {
+            this.date = date;
+            this.timeIn = in;
+            this.timeOut = out;
+        }
+    }
+
+    // ---------------- LOAD EMPLOYEES ----------------
+    public static void loadEmployees() {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(MotorPH.class.getResourceAsStream("/employees.csv")))) {
+
+            reader.readLine(); // skip header
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] d = parseCSV(line);
+
+                employeeNumbers.add(Integer.parseInt(d[0]));                  // employee #
+                employeeNames.add(d[2] + " " + d[1]);                        // first + last name
+                employeeBirthdays.add(d[3]);                                  // birthday
+                employeeAddresses.add(d[4]);                                   // address
+                employeePhones.add(d[5]);                                      // phone
+                employeeStatuses.add(d[10]);                                   // status
+                employeePositions.add(d[11]);                                  // position
+                employeeHourlyRates.add(Double.parseDouble(d[18]));           // hourly rate
+            }
         } catch (Exception e) {
-            System.out.println("Error parsing time: " + timeIn + " - " + timeOut);
-            return 0; // return 0 if error
+            System.out.println("Error loading employees.csv: " + e.getMessage());
         }
     }
 
-    // --- Payroll Methods ---
-    public static double SSS(double gross) {
-        // calculate SSS contribution based on gross salary
+    // ---------------- LOAD ATTENDANCE ----------------
+    public static void loadAttendance() {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(MotorPH.class.getResourceAsStream("/attendance.csv")))) {
+
+            reader.readLine(); // skip header
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] d = parseCSV(line);
+                int empNo = Integer.parseInt(d[0]);
+                LocalDate date = LocalDate.parse(d[3], dateFormatter);
+                LocalTime in = LocalTime.parse(d[4], timeFormatter);
+                LocalTime out = LocalTime.parse(d[5], timeFormatter);
+
+                Attendance att = new Attendance(date, in, out);
+                attendanceMap.computeIfAbsent(empNo, k -> new ArrayList<>()).add(att); // add attendance to map
+            }
+        } catch (Exception e) {
+            System.out.println("Error loading attendance.csv: " + e.getMessage());
+        }
+    }
+
+    // ---------------- EMPLOYEE MENU ----------------
+    public static void employeeMenu(Scanner scanner) {
+        while (true) {
+            System.out.println("\n=== EMPLOYEE MENU ===");
+            System.out.println("1. View Info");
+            System.out.println("2. View Payslip");
+            System.out.println("3. Logout");
+            String choice = scanner.nextLine();
+
+            if (choice.equals("3")) break;
+
+            System.out.print("Enter Employee #: ");
+            int empNo = Integer.parseInt(scanner.nextLine());
+            int index = employeeNumbers.indexOf(empNo);
+            if (index == -1) {
+                System.out.println("Employee not found.");
+                continue;
+            }
+
+            if (choice.equals("1")) displayEmployeeInfo(index);
+            else generatePayslip(empNo, index); // generate payslip
+        }
+    }
+
+    // ---------------- PAYROLL STAFF MENU ----------------
+    public static void payrollMenu(Scanner scanner) {
+        while (true) {
+            System.out.println("\n=== PAYROLL STAFF MENU ===");
+            System.out.println("1. Process One Employee");
+            System.out.println("2. Process All Employees");
+            System.out.println("3. View All Employees");
+            System.out.println("4. Logout");
+            String choice = scanner.nextLine();
+
+            switch (choice) {
+                case "1" -> {
+                    System.out.print("Enter Employee #: ");
+                    int empNo = Integer.parseInt(scanner.nextLine());
+                    int index = employeeNumbers.indexOf(empNo);
+                    if (index != -1) generatePayslip(empNo, index);
+                }
+                case "2" -> {
+                    for (int i = 0; i < employeeNumbers.size(); i++) {
+                        generatePayslip(employeeNumbers.get(i), i);
+                    }
+                }
+                case "3" -> viewAllEmployees();
+                case "4" -> { return; }
+            }
+        }
+    }
+
+    // ---------------- DISPLAY EMPLOYEE INFO ----------------
+    public static void displayEmployeeInfo(int i) {
+        System.out.println("\n========== EMPLOYEE INFORMATION ==========");
+        System.out.println("Employee #: " + employeeNumbers.get(i));
+        System.out.println("Name      : " + employeeNames.get(i));
+        System.out.println("Birthday  : " + employeeBirthdays.get(i));
+        System.out.println("Address   : " + employeeAddresses.get(i));
+        System.out.println("Phone     : " + employeePhones.get(i));
+        System.out.println("Status    : " + employeeStatuses.get(i));
+        System.out.println("Position  : " + employeePositions.get(i));
+        System.out.printf("Hourly Rate: %.2f\n", employeeHourlyRates.get(i));
+        System.out.println("==========================================");
+    }
+
+    // ---------------- VIEW ALL EMPLOYEES ----------------
+    public static void viewAllEmployees() {
+        for (int i = 0; i < employeeNumbers.size(); i++) displayEmployeeInfo(i);
+    }
+
+    // ---------------- GENERATE PAYSLIP ----------------
+    public static void generatePayslip(int empNo, int index) {
+
+        System.out.println("\n=================================================");
+        System.out.println("                MOTORPH PAYSLIP");
+        System.out.println("=================================================");
+
+        System.out.println("Employee #: " + employeeNumbers.get(index));
+        System.out.println("Name      : " + employeeNames.get(index));
+        System.out.println("Position  : " + employeePositions.get(index));
+        System.out.printf("Hourly Rate: %.2f\n", employeeHourlyRates.get(index));
+
+        double monthlyGross = 0;      // sum of cutoffs
+        double monthlyDeduction = 0;  // deductions applied only once in second cutoff
+
+        // loop months June(6) to December(12)
+        for (int month = 6; month <= 12; month++) {
+
+            double[] cutoffHours = new double[2]; // 0 = first cutoff, 1 = second cutoff
+            double[] cutoffGross = new double[2];
+
+            // loop two cutoffs per month
+            for (int w = 0; w < 2; w++) {
+                int startDay = (w == 0) ? 1 : 16;
+                int endDay = (w == 0) ? 15 : getLastDayOfMonth(month);
+
+                cutoffHours[w] = calculateHoursForPeriod(empNo, month, startDay, endDay);
+                cutoffGross[w] = cutoffHours[w] * employeeHourlyRates.get(index);
+            }
+
+            monthlyGross = cutoffGross[0] + cutoffGross[1]; // total gross
+
+            // compute deductions for the whole month (applied in second cutoff)
+            double sss = SSS(monthlyGross);
+            double phil = PhilHealth(monthlyGross);
+            double pagibig = PAGIBIG(monthlyGross);
+            double tax = WithholdingTax(monthlyGross - (sss + phil + pagibig));
+            monthlyDeduction = sss + phil + pagibig + tax;
+
+            // OUTPUT
+            System.out.println("\n-------------------------------------------------");
+            System.out.println("Month: " + Month.of(month));
+            System.out.println("-------------------------------------------------");
+
+            // first cutoff: no deduction
+            System.out.printf("Cutoff 1 (1-15)\n");
+            System.out.printf("  Hours Worked : %8.2f\n", cutoffHours[0]);
+            System.out.printf("  Gross Pay    : %8.2f\n", cutoffGross[0]);
+            System.out.printf("  Net Pay      : %8.2f\n", cutoffGross[0]);
+
+            // second cutoff: deductions applied
+            double net2 = cutoffGross[1] - monthlyDeduction;
+            if (net2 < 0) net2 = 0;
+            System.out.printf("\nCutoff 2 (16-end)\n");
+            System.out.printf("  Hours Worked : %8.2f\n", cutoffHours[1]);
+            System.out.printf("  Gross Pay    : %8.2f\n", cutoffGross[1]);
+            System.out.println("  Deductions:");
+            System.out.printf("    SSS        : %8.2f\n", sss);
+            System.out.printf("    PhilHealth : %8.2f\n", phil);
+            System.out.printf("    Pag-IBIG   : %8.2f\n", pagibig);
+            System.out.printf("    Withholding: %8.2f\n", tax);
+            System.out.printf("    Total      : %8.2f\n", monthlyDeduction);
+            System.out.printf("  Net Pay      : %8.2f\n", net2);
+
+            System.out.println("\nSUMMARY:");
+            System.out.printf("  Monthly Gross : %8.2f\n", monthlyGross);
+            System.out.printf("  Total Deduct. : %8.2f\n", monthlyDeduction);
+            System.out.printf("  Monthly Net   : %8.2f\n", cutoffGross[0] + net2);
+        }
+        System.out.println("\n=================================================\n");
+    }
+
+    // ---------------- CALCULATE HOURS FOR A PERIOD ----------------
+    public static double calculateHoursForPeriod(int empNo, int month, int startDay, int endDay) {
+        List<Attendance> records = attendanceMap.get(empNo);
+        if (records == null) return 0;
+        double total = 0;
+        for (Attendance att : records) {
+            if (att.date.getMonthValue() != month) continue;
+            int day = att.date.getDayOfMonth();
+            if (day < startDay || day > endDay) continue;
+            total += calculateDailyHours(att.timeIn, att.timeOut);
+        }
+        return total;
+    }
+
+    // ---------------- CALCULATE DAILY HOURS ----------------
+    public static double calculateDailyHours(LocalTime in, LocalTime out) {
+
+        LocalTime standardStart = LocalTime.of(8, 0);   // work start
+        LocalTime graceEnd = LocalTime.of(8, 10);       // 10-minute grace
+        LocalTime standardEnd = LocalTime.of(17, 0);    // work end
+
+        // apply grace period
+        if (!in.isAfter(graceEnd)) in = standardStart;   // early or within 10min grace counted as 8:00
+        if (out.isAfter(standardEnd)) out = standardEnd; // cannot count after 5PM
+
+        if (out.isBefore(in)) return 0;
+
+        double hours = Duration.between(in, out).toMinutes() / 60.0;
+
+        if (hours > 4) hours -= 1; // lunch break deduction
+
+        return hours;
+    }
+
+    // ---------------- GET LAST DAY OF MONTH ----------------
+    public static int getLastDayOfMonth(int month) {
+        return switch (month) {
+            case 4, 6, 9, 11 -> 30;
+            case 2 -> 28;
+            default -> 31;
+        };
+    }
+
+    // ---------------- CSV PARSER ----------------
+    public static String[] parseCSV(String line) {
+        List<String> list = new ArrayList<>();
+        StringBuilder sb = new StringBuilder();
+        boolean quote = false;
+        for (char c : line.toCharArray()) {
+            if (c == '"') quote = !quote;
+            else if (c == ',' && !quote) { list.add(sb.toString()); sb.setLength(0);}
+            else sb.append(c);
+        }
+        list.add(sb.toString());
+        return list.toArray(String[]::new);
+    }
+
+    // ---------------- DEDUCTION FORMULAS ----------------
+    public static double SSS(double gross) { // SSS based on gross
         if (gross < 3250) return 135;
         else if (gross < 3750) return 157.5;
         else if (gross < 4250) return 180;
@@ -100,129 +359,23 @@ public class MotorPH {
     }
 
     public static double PhilHealth(double gross) {
-        double total = gross * 0.03;   // 3% of gross
-        if (total < 300) total = 300;  // min contribution
-        if (total > 1800) total = 1800; // max contribution
-        return total / 2; // employee share
+        double total = gross * 0.03;
+        if (total < 300) total = 300;
+        if (total > 1800) total = 1800;
+        return total / 2;
     }
 
     public static double PAGIBIG(double gross) {
-        double share = (gross <= 1500) ? gross * 0.01 : gross * 0.02; // 1% or 2%
-        return Math.min(share, 100); // max 100
+        double share = (gross <= 1500) ? gross * 0.01 : gross * 0.02;
+        return Math.min(share, 100);
     }
 
     public static double WithholdingTax(double taxable) {
-        // calculate tax based on taxable income
         if (taxable <= 20832) return 0;
         else if (taxable <= 33332) return (taxable - 20833) * 0.20;
         else if (taxable <= 66666) return 2500 + (taxable - 33333) * 0.25;
         else if (taxable <= 166666) return 10833 + (taxable - 66667) * 0.30;
         else if (taxable <= 666666) return 40833.33 + (taxable - 166667) * 0.32;
         else return 200833.33 + (taxable - 666667) * 0.35;
-    }
-
-    // --- Main ---
-    public static void main(String[] args) {
-        Scanner sc = new Scanner(System.in);
-
-        // --- Load employee data from CSV ---
-        try (BufferedReader br = new BufferedReader(
-                new InputStreamReader(MotorPH.class.getResourceAsStream("employees.csv"))
-        )) {
-            br.readLine(); // skip header
-            String line;
-            while ((line = br.readLine()) != null) {
-                String[] data = parseCSVLine(line);
-                empNos.add(Integer.valueOf(data[0].trim())); // emp number
-                empNames.add(data[2].trim() + " " + data[1].trim()); // first + last name
-                empBirthdays.add(data[3].trim()); // birthday
-                empRates.add(Double.valueOf(data[18].trim().replace("\"","").replace(",", ""))); // hourly rate
-            }
-        } catch (Exception e) {
-            System.out.println("Error reading employees.csv"); // error msg
-            return;
-        }
-
-        int numEmployees = empNos.size();
-        monthlyHours = new double[numEmployees][12][4]; // init 3D array for hours
-
-        // --- Load attendance data from CSV ---
-        try (BufferedReader br = new BufferedReader(
-                new InputStreamReader(MotorPH.class.getResourceAsStream("attendance.csv"))
-        )) {
-            br.readLine(); // skip header
-            String line;
-            while ((line = br.readLine()) != null) {
-                String[] data = parseCSVLine(line);
-                int empNo = Integer.parseInt(data[0].trim());
-                int index = empNos.indexOf(empNo); // find employee index
-                if (index == -1) continue; // skip if not found
-
-                // figure out month and week
-                String date = data[3].trim();
-                int month = Integer.parseInt(date.split("/")[0]) - 1; // month 0-11
-                int day = Integer.parseInt(date.split("/")[1]);
-                int week = Math.min((day - 1) / 7, 3); // week 0-3
-
-                // calculate hours worked and add to array
-                double hours = calculateHoursWorked(data[4].trim(), data[5].trim());
-                monthlyHours[index][month][week] += hours;
-            }
-        } catch (Exception e) {
-            System.out.println("Error reading attendance.csv");
-            return;
-        }
-
-        // --- User input ---
-        System.out.print("Enter Employee Number: ");
-        int inputEmp = sc.nextInt();
-        int empIndex = empNos.indexOf(inputEmp);
-        if (empIndex == -1) {
-            System.out.println("Employee not found!");
-            return;
-        }
-
-        System.out.print("Enter Month (1-12): ");
-        int inputMonth = sc.nextInt() - 1;
-        System.out.print("Enter Week Number (1-4): ");
-        int inputWeek = sc.nextInt() - 1;
-
-        // --- Calculate weekly and monthly gross ---
-        double hoursWorked = monthlyHours[empIndex][inputMonth][inputWeek];       // hours this week
-        double weeklyGross = hoursWorked * empRates.get(empIndex);                // gross for week
-
-        double monthlyGross = 0;
-        for (int w = 0; w < 4; w++)
-            monthlyGross += monthlyHours[empIndex][inputMonth][w] * empRates.get(empIndex); // sum month
-
-        // --- Calculate deductions ---
-        double totalSSS = SSS(monthlyGross);
-        double totalPhilHealth = PhilHealth(monthlyGross);
-        double totalPAGIBIG = PAGIBIG(monthlyGross);
-        //Tax is based on salary after deductions//
-        double totalWHT = WithholdingTax(monthlyGross - (totalSSS + totalPhilHealth + totalPAGIBIG));
-        // Only show deductions on the last week//
-        // --- Print output ---
-        System.out.println("------------------------------------------------");
-        System.out.println("Employee #: " + empNos.get(empIndex));
-        System.out.println("Name: " + empNames.get(empIndex));
-        System.out.println("Birthday: " + empBirthdays.get(empIndex));
-        System.out.println("Month: " + (inputMonth + 1));
-        System.out.println("Week: " + (inputWeek + 1));
-        System.out.printf("Hours Worked: %.2f\n", hoursWorked);
-        System.out.printf("Gross Salary: %.2f\n", weeklyGross);
-
-        if (inputWeek < 3) { // only print gross for weeks 1-3
-            System.out.printf("Weekly Net Salary: %.2f\n", weeklyGross);
-        } else { // week 4, print full deductions
-            double weeklyNet = weeklyGross - (totalSSS + totalPhilHealth + totalPAGIBIG + totalWHT);
-            System.out.printf("SSS: %.2f\n", totalSSS);
-            System.out.printf("PhilHealth: %.2f\n", totalPhilHealth);
-            System.out.printf("Pag-IBIG: %.2f\n", totalPAGIBIG);
-            System.out.printf("Withholding Tax: %.2f\n", totalWHT);
-            System.out.printf("Total Deduction: %.2f\n", (totalSSS + totalPhilHealth + totalPAGIBIG + totalWHT));
-            System.out.printf("Weekly Net Salary: %.2f\n", weeklyNet);
-        }
-        System.out.println("------------------------------------------------");
     }
 }
