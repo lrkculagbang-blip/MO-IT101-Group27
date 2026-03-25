@@ -116,6 +116,7 @@ public class MotorPH {
             System.out.println("1. View Info");
             System.out.println("2. View Payslip");
             System.out.println("3. Logout");
+            System.out.print("Enter Number:");
             String choice = scanner.nextLine();
 
             if (choice.equals("3")) break;
@@ -141,6 +142,7 @@ public class MotorPH {
             System.out.println("2. Process All Employees");
             System.out.println("3. View All Employees");
             System.out.println("4. Logout");
+            System.out.print("Enter Number:");
             String choice = scanner.nextLine();
 
             switch (choice) {
