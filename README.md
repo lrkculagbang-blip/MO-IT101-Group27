@@ -13,6 +13,10 @@ This is a Java-based payroll system that computes employee weekly salary, attend
 
 Each member contributed to different parts of the system.
 
+---
+## Project Plan
+Project Plan Link :https://docs.google.com/spreadsheets/d/1XAH_y4hdXI9Tf69ff4kyfe68qhp_BaFaUNn4JN60IKA/edit?usp=sharing
+
 
 ### Classes and Their Purpose:
 
