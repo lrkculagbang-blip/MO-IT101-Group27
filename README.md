@@ -8,7 +8,6 @@ This is a Java-based payroll system that computes employee weekly salary, attend
 ## 👥 Team Members
 - Rheyn Rowen Gonzales
 -Ralph Matthew Paran 
--Princess alzhaina Silad
 -Fernalyn Bernardo
 -Kenneth Culagbang
 
